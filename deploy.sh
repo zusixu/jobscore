@@ -37,12 +37,41 @@ check_command() {
 
 # 检查和安装必要工具
 if ! check_command docker; then
-    apt-get update && apt-get install -y docker.io
+    echo -e "${YELLOW}从阿里云源安装Docker...${NC}"
+    # 使用阿里云镜像源安装Docker
+    curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | apt-key add - 2>/dev/null
+    add-apt-repository "deb [arch=amd64] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable"
+    apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    
+    # 配置Docker镜像源为阿里云
+    mkdir -p /etc/docker
+    cat > /etc/docker/daemon.json << EOF
+{
+  "registry-mirrors": [
+    "https://registry.docker-cn.com",
+    "https://docker.mirrors.ustc.edu.cn",
+    "https://gcr.mirrors.ustc.edu.cn",
+    "https://ghcr.io.mirror.1001.workers.dev"
+  ],
+  "insecure-registries": []
+}
+EOF
+    # 重启Docker使配置生效
+    systemctl daemon-reload
+    systemctl restart docker
+    echo -e "${GREEN}✓${NC} Docker安装完成，已配置阿里云镜像源"
 fi
 
 if ! check_command docker-compose; then
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    echo -e "${YELLOW}从Github安装docker-compose...${NC}"
+    # 使用GitHub下载docker-compose（国内如果下载慢可替换为国内源）
+    DOCKER_COMPOSE_URL="https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)"
+    # 备用国内源（如果GitHub下载慢）
+    # DOCKER_COMPOSE_URL="https://get.daocloud.io/docker/compose/releases/download/latest/docker-compose-$(uname -s)-$(uname -m)"
+    
+    curl -L "$DOCKER_COMPOSE_URL" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
+    echo -e "${GREEN}✓${NC} docker-compose安装完成"
 fi
 
 if ! check_command nginx; then
