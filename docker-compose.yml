@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  job-score:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-score-app
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL证书（只读）
+      - /var/log/nginx:/var/log/nginx
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - job-score-network
+
+networks:
+  job-score-network:
+    driver: bridge

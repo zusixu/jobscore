@@ -6,6 +6,7 @@ import styleImport from 'vite-plugin-style-import'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: process.env.VITE_APP_URL_BASE || '/',
   plugins: [
     vue(),
     legacy({
@@ -28,7 +29,7 @@ export default defineConfig({
     })
   ],
   optimizeDeps: {
-
+    include: ['vue', 'element-plus']
   },
   resolve: {
     alias: {
@@ -37,5 +38,33 @@ export default defineConfig({
   },
   css: {
     postcss: './config/postcss.config.js'
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: process.env.NODE_ENV === 'development',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: process.env.NODE_ENV === 'production'
+      }
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vue-vendor': ['vue', 'element-plus']
+        }
+      }
+    }
+  },
+  server: {
+    port: 5173,
+    strictPort: false,
+    open: true,
+    cors: true
+  },
+  preview: {
+    port: 4173,
+    strictPort: false
   }
 })
