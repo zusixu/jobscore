@@ -5,16 +5,23 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: job-score-app
+    container_name: ${DOCKER_CONTAINER_NAME:-job-score-app}
     restart: always
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /etc/letsencrypt:/etc/letsencrypt:ro  # SSL证书（只读）
-      - /var/log/nginx:/var/log/nginx
+      # SSL证书 - 使用环境变量指定路径
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Nginx日志目录 - 使用环境变量指定路径  
+      - ${LOG_DIR:-/var/log/job-score}:/var/log/nginx
+      # Web根目录 - 可选，用于挂载构建的静态文件
+      - ${NGINX_ROOT:-/var/www/job-score/dist}:/usr/share/nginx/html
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - DOMAIN=${DOMAIN:-your-domain.com}
+      - DOMAIN_WWW=${DOMAIN_WWW:-www.your-domain.com}
+      - TZ=${TZ:-Asia/Shanghai}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s

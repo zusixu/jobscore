@@ -7,11 +7,53 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 配置变量
-APP_NAME="job-score"
-APP_DIR="/opt/job-score"
-LOG_DIR="/var/log/$APP_NAME"
+# ============================================
+# 配置文件加载
+# ============================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 默认值
+APP_BASE_DIR="/opt/job-score"
+LOG_DIR="/var/log/job-score"
+BACKUP_DIR="/var/backups/job-score"
 DOMAIN="your-domain.com"
+DOMAIN_WWW="www.your-domain.com"
+SSL_CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+SSL_KEY_PATH="/etc/letsencrypt/live/${DOMAIN}/privkey.pem"
+NGINX_ROOT="/var/www/job-score/dist"
+DOCKER_CONTAINER_NAME="job-score-app"
+NODE_ENV="production"
+
+# 尝试加载配置文件
+if [ -f "$SCRIPT_DIR/.env.deployment" ]; then
+    echo -e "${BLUE}ℹ️ 加载配置文件: $SCRIPT_DIR/.env.deployment${NC}"
+    set -a
+    source "$SCRIPT_DIR/.env.deployment"
+    set +a
+    echo -e "${GREEN}✓${NC} 配置文件已加载"
+elif [ -f "$SCRIPT_DIR/.env.deployment.example" ]; then
+    echo -e "${YELLOW}⚠${NC} 未找到 .env.deployment，使用 .env.deployment.example 中的默认配置"
+    echo -e "${BLUE}提示:${NC} 请复制 .env.deployment.example 为 .env.deployment 并根据实际情况修改"
+    set -a
+    source "$SCRIPT_DIR/.env.deployment.example"
+    set +a
+else
+    echo -e "${YELLOW}⚠${NC} 未找到配置文件，使用硬编码默认值"
+    echo -e "${BLUE}提示:${NC} 建议创建 .env.deployment 文件来自定义路径"
+fi
+
+# 展示当前配置
+echo -e "\n${BLUE}当前配置:${NC}"
+echo "  应用目录: $APP_BASE_DIR"
+echo "  日志目录: $LOG_DIR"
+echo "  备份目录: $BACKUP_DIR"
+echo "  域名: $DOMAIN"
+echo "  Nginx根目录: $NGINX_ROOT"
+echo ""
+
+# 设置APP_DIR为APP_BASE_DIR（保持向后兼容）
+APP_DIR="$APP_BASE_DIR"
+APP_NAME="job-score"
 
 # 检测系统信息
 if [ -f /etc/os-release ]; then
@@ -208,8 +250,41 @@ else
 fi
 echo -e "${GREEN}✓${NC} 环境变量配置完成"
 
+# 4.5 配置Nginx配置文件
+echo -e "\n${YELLOW}[4.5/8]${NC} 配置Nginx..."
+if [ -f "$APP_DIR/nginx.conf" ]; then
+    # 创建Nginx配置的实际副本
+    NGINX_CONF_ACTUAL="/etc/nginx/sites-available/job-score"
+    
+    # 读取模板并进行替换
+    sed -e "s|DOMAIN_NAME|$DOMAIN|g" \
+        -e "s|www.DOMAIN_NAME|$DOMAIN_WWW|g" \
+        -e "s|CERT_PATH|/etc/letsencrypt/live/$DOMAIN|g" \
+        -e "s|WEB_ROOT|/usr/share/nginx/html|g" \
+        "$APP_DIR/nginx.conf" > "$NGINX_CONF_ACTUAL"
+    
+    # 启用该配置（如果使用sites-enabled）
+    if [ ! -L "/etc/nginx/sites-enabled/job-score" ]; then
+        ln -s "$NGINX_CONF_ACTUAL" "/etc/nginx/sites-enabled/job-score"
+    fi
+    
+    # 禁用default配置
+    rm -f /etc/nginx/sites-enabled/default
+    
+    # 测试nginx配置
+    if nginx -t &>/dev/null; then
+        systemctl reload nginx
+        echo -e "${GREEN}✓${NC} Nginx配置已应用"
+    else
+        echo -e "${YELLOW}⚠${NC} Nginx配置测试失败，请检查: $NGINX_CONF_ACTUAL"
+        nginx -t
+    fi
+else
+    echo -e "${YELLOW}⚠${NC} nginx.conf不存在"
+fi
+
 # 5. 配置SSL证书
-echo -e "\n${YELLOW}[5/8]${NC} 配置SSL证书..."
+echo -e "\n${YELLOW}[5/9]${NC} 配置SSL证书..."
 if [ ! -d "/etc/letsencrypt/live/$DOMAIN" ]; then
     echo -e "${YELLOW}⚠${NC} SSL证书不存在，跳过此步骤"
     echo -e "${BLUE}提示:${NC} 部署成功后，请手动运行以下命令生成证书:"
@@ -219,7 +294,7 @@ else
 fi
 
 # 6. 构建Docker镜像
-echo -e "\n${YELLOW}[6/8]${NC} 构建Docker镜像..."
+echo -e "\n${YELLOW}[6/9]${NC} 构建Docker镜像..."
 if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/docker-compose.yml" ]; then
     cd "$APP_DIR"
     docker-compose build
@@ -229,7 +304,7 @@ else
 fi
 
 # 7. 启动容器
-echo -e "\n${YELLOW}[7/8]${NC} 启动应用容器..."
+echo -e "\n${YELLOW}[7/9]${NC} 启动应用容器..."
 if [ -f "$APP_DIR/docker-compose.yml" ]; then
     cd "$APP_DIR"
     docker-compose up -d
@@ -246,7 +321,7 @@ else
 fi
 
 # 8. 设置自动续期
-echo -e "\n${YELLOW}[8/8]${NC} 配置自动续期..."
+echo -e "\n${YELLOW}[8/9]${NC} 配置自动续期..."
 if [ -f "$APP_DIR/docker-compose.yml" ]; then
     if ! crontab -l 2>/dev/null | grep -q "certbot renew"; then
         (crontab -l 2>/dev/null; echo "0 0 1 * * certbot renew --quiet && docker-compose -f $APP_DIR/docker-compose.yml restart job-score 2>&1 | logger") | crontab -
@@ -262,17 +337,27 @@ echo -e "${GREEN}✓ 部署脚本执行完成！${NC}"
 echo -e "${GREEN}========================================${NC}"
 
 echo -e "\n${BLUE}后续步骤:${NC}"
-echo "1. 修改配置文件（如未修改）:"
-echo "   sed -i 's/your-domain.com/your-real-domain/g' $APP_DIR/nginx.conf"
+echo "1. 复制并修改配置文件："
+echo "   cp .env.deployment.example .env.deployment"
+echo "   # 然后编辑 .env.deployment 修改实际的域名和路径"
 echo ""
-echo "2. 生成SSL证书:"
-echo "   certbot certonly --standalone -d your-real-domain"
+echo "2. 生成SSL证书："
+echo "   certbot certonly --standalone -d $DOMAIN -d $DOMAIN_WWW"
 echo ""
-echo "3. 查看应用状态:"
+echo "3. 查看应用状态："
 echo "   cd $APP_DIR && docker-compose ps"
 echo "   docker-compose logs -f"
 echo ""
-echo "4. 常用命令:"
-echo "   ./manage.sh start|stop|restart|logs|status"
+echo "4. 常用管理命令："
+echo "   ./manage.sh start      # 启动应用"
+echo "   ./manage.sh stop       # 停止应用"
+echo "   ./manage.sh restart    # 重启应用"
+echo "   ./manage.sh logs       # 查看日志"
+echo "   ./manage.sh status     # 查看状态"
+echo "   ./manage.sh update     # 更新应用"
 echo ""
-echo -e "${YELLOW}⚠ 注意:${NC} 请确保:/opt/job-score 目录下有完整的项目文件（包括docker-compose.yml）"
+echo -e "${YELLOW}⚠ 重要提示:${NC}"
+echo "1. 确保配置文件 .env.deployment 已正确配置"
+echo "2. 确保目录结构正确: $APP_DIR 下包含所有项目文件"
+echo "3. 应用路径不再硬编码，使用 .env.deployment 统一管理"
+echo "4. Docker容器内路径: /usr/share/nginx/html (Web根目录)"

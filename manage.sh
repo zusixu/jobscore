@@ -1,7 +1,30 @@
 #!/bin/bash
 
-# 应用管理脚本
-APP_DIR="/opt/job-score"
+# ============================================
+# 配置文件加载
+# ============================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 默认值
+APP_BASE_DIR="/opt/job-score"
+LOG_DIR="/var/log/job-score"
+BACKUP_DIR="/var/backups/job-score"
+DOMAIN="your-domain.com"
+DOCKER_CONTAINER_NAME="job-score-app"
+
+# 尝试加载配置文件
+if [ -f "$SCRIPT_DIR/.env.deployment" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env.deployment"
+    set +a
+elif [ -f "$SCRIPT_DIR/.env.deployment.example" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env.deployment.example"
+    set +a
+fi
+
+# 设置APP_DIR为APP_BASE_DIR
+APP_DIR="$APP_BASE_DIR"
 DOCKER_COMPOSE="docker-compose -f $APP_DIR/docker-compose.yml"
 
 case "$1" in
