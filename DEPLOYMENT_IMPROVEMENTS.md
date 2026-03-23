@@ -151,6 +151,49 @@ curl -I https://$(grep DOMAIN $APP_BASE_DIR/.env.deployment | cut -d= -f2)
    - 只需修改 `.env.deployment` 中的相应项
    - 重新运行 `./deploy.sh` 即可
 
+## 两种配置模式
+
+### 模式1: 标准模式（系统路径）
+
+所有路径分散在系统目录：
+```bash
+APP_BASE_DIR="/opt/job-score"
+LOG_DIR="/var/log/job-score"
+BACKUP_DIR="/var/backups/job-score"
+```
+
+**优点:** 符合Linux文件系统规范（FHS）  
+**缺点:** 路径分散，难以迁移
+
+### 模式2: 自包含模式（推荐用于开发/测试）
+
+所有路径都在项目文件夹内：
+```bash
+PROJECT_ROOT="/opt/job-score"
+APP_BASE_DIR="${PROJECT_ROOT}"
+DATA_DIR="${PROJECT_ROOT}/data"
+LOG_DIR="${PROJECT_ROOT}/logs"
+BACKUP_DIR="${PROJECT_ROOT}/backups"
+CONFIG_DIR="${PROJECT_ROOT}/config"
+```
+
+**优点:** 
+- 项目自包含，便于备份和迁移
+- 只需备份一个文件夹
+- 便于多实例部署
+- 便于开发和测试
+
+**缺点:** 
+- 日志、数据分散在项目内可能占用空间
+- 不符合Linux规范
+
+**推荐场景:**
+- ✅ 开发环境
+- ✅ 测试环境
+- ✅ Docker容器内
+- ✅ 需要频繁迁移的部署
+- ✅ 多实例部署
+
 ## 常见问题
 
 **Q: 脚本找不到配置文件怎么办?**  
@@ -161,3 +204,11 @@ A: 可以！只需创建不同的配置文件（如 `.env.deployment.app1`），
 
 **Q: 部署后想修改路径怎么办?**  
 A: 编辑 `.env.deployment` 后重新运行部署脚本，脚本会检查并创建必要的目录
+
+**Q: 如何使用自包含模式（项目内所有文件）?**  
+A: 参考 `.env.deployment.self-contained` 文件，基于 `PROJECT_ROOT` 定义所有路径：
+```bash
+cp .env.deployment.self-contained .env.deployment
+nano .env.deployment  # 修改 PROJECT_ROOT 为实际路径
+sudo ./deploy.sh
+```

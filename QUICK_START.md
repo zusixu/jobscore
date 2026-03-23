@@ -13,6 +13,10 @@ cd job-score
 ```
 
 ### 第2步：配置部署参数 ⭐ 重要
+
+有两种配置模式可选：
+
+#### 方案A：标准模式（推荐用于生产）
 ```bash
 # 复制配置模板
 cp .env.deployment.example .env.deployment
@@ -21,17 +25,48 @@ cp .env.deployment.example .env.deployment
 nano .env.deployment
 ```
 
-**需要修改的参数：**
+配置示例：
 ```ini
-# 你的实际域名
+# 标准路径 - 符合Linux规范
+APP_BASE_DIR="/opt/job-score"
+LOG_DIR="/var/log/job-score"
+BACKUP_DIR="/var/backups/job-score"
 DOMAIN="example.com"
 DOMAIN_WWW="www.example.com"
-
-# 应用安装路径（可选，默认 /opt/job-score）
-APP_BASE_DIR="/opt/job-score"
-
-# 其他路径可保持默认
 ```
+
+#### 方案B：自包含模式（推荐用于开发/测试）✨ 推荐初次使用
+```bash
+# 复制自包含模式配置
+cp .env.deployment.self-contained .env.deployment
+
+# 编辑配置文件
+nano .env.deployment
+```
+
+配置示例：
+```ini
+# 所有路径都在项目文件夹内
+PROJECT_ROOT="/opt/job-score"
+APP_BASE_DIR="${PROJECT_ROOT}"
+DATA_DIR="${PROJECT_ROOT}/data"
+LOG_DIR="${PROJECT_ROOT}/logs"
+BACKUP_DIR="${PROJECT_ROOT}/backups"
+DOMAIN="example.com"
+DOMAIN_WWW="www.example.com"
+```
+
+**关键区别:**
+| 项目 | 标准模式 | 自包含模式 |
+|------|--------|---------|
+| 日志位置 | `/var/log/job-score` | `/opt/job-score/logs` |
+| 备份位置 | `/var/backups/job-score` | `/opt/job-score/backups` |
+| 数据位置 | 系统路径 | `/opt/job-score/data` |
+| 易于迁移 | ❌ 困难 | ✅ 简单 |
+| 规范性 | ✅ FHS规范 | ⚠️ 非规范 |
+| 初次使用 | ⚠️ 复杂 | ✅ 推荐 |
+
+> 💡 **建议**: 如果你想把所有文件都放在 git clone 的文件夹下，使用 **方案B: 自包含模式**
 
 ### 第3步：执行部署
 ```bash
